@@ -272,15 +272,3 @@ static BOOL isAlbumTypeSupported(PHAssetCollectionSubtype type) {
   }
 
 }
-
-static BOOL isAlbumTypeNotSupported(PHAssetCollectionSubtype type)
-{
-    switch (type) {
-        case PHAssetCollectionSubtypeSmartAlbumAnimated:
-        case PHAssetCollectionSubtypeSmartAlbumLongExposures:
-        case PHAssetCollectionSubtypeSmartAlbumDepthEffect:
-            return YES;
-        default:
-            return NO;
-    }
-}
