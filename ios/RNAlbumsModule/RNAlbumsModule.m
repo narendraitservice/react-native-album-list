@@ -54,72 +54,93 @@ RCT_EXPORT_METHOD(getAlbumList:(NSDictionary *)options
 
     if (authorized) {
 
-      PHFetchResult<PHAssetCollection *> *collections =
-
-      [PHAssetCollection fetchAssetCollectionsWithType:PHAssetCollectionTypeSmartAlbum
-
-                                               subtype:PHAssetCollectionSubtypeAny
-
-                                               options:nil];
-
-      __block NSMutableArray<NSDictionary *> *result = [[NSMutableArray alloc] init];
-
-      [collections enumerateObjectsUsingBlock:^(PHAssetCollection * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
-
-        PHAssetCollectionSubtype type = [obj assetCollectionSubtype];
-
-          NSLog(@"type %ld",(long)type);
-
-        if (!isAlbumTypeSupported(type)) {
-
-          return;
-
-        }
-
+        NSArray *collectionsFetchResults;
         
-
-        PHFetchOptions *fetchOptions = [[PHFetchOptions alloc] init];
-
-        fetchOptions.predicate = [NSPredicate predicateWithFormat:@"mediaType == %d || mediaType == %d", PHAssetMediaTypeImage , PHAssetMediaTypeVideo];
-
-        fetchOptions.sortDescriptors = @[ [NSSortDescriptor sortDescriptorWithKey:@"creationDate" ascending:YES] ];
-
-        PHFetchResult *fetchResult = [PHAsset fetchAssetsInAssetCollection:obj options: fetchOptions];
-
-        PHAsset *coverAsset = fetchResult.lastObject;
-
-          
-
-        if (coverAsset) {
-
-            NSDictionary *album = @{@"count": @(fetchResult.count),
-
-                                    @"name": albumNameFromType(type),
-
-                                    // Photos Framework asset scheme ph://
-
-                                    // https://github.com/facebook/react-native/blob/master/Libraries/CameraRoll/RCTPhotoLibraryImageLoader.m
-
-                                    @"cover": [NSString stringWithFormat:@"ph://%@", coverAsset.localIdentifier] };
-
-            [result addObject:album];
-
+        PHFetchResult *smartAlbums = [PHAssetCollection fetchAssetCollectionsWithType:PHAssetCollectionTypeSmartAlbum subtype:PHAssetCollectionSubtypeAlbumRegular options:nil];
+        PHFetchResult *syncedAlbums = [PHAssetCollection fetchAssetCollectionsWithType:PHAssetCollectionTypeAlbum subtype:PHAssetCollectionSubtypeAlbumSyncedAlbum options:nil];
+        PHFetchResult *userCollections = [PHCollectionList fetchTopLevelUserCollectionsWithOptions:nil];
+        
+        // Add each PHFetchResult to the array
+        collectionsFetchResults = @[smartAlbums, userCollections, syncedAlbums];
+        NSMutableArray *localizedTitles = [[NSMutableArray alloc] init];
+        for (int i = 0; i < collectionsFetchResults.count; i ++)
+        {
+            PHFetchResult *fetchResult = collectionsFetchResults[i];
+            for (int x = 0; x < fetchResult.count; x++)
+            {
+                PHCollection *collection = fetchResult[x];
+                [localizedTitles addObject:collection];
+            }
         }
-
-      }];
+        
+        __block NSMutableArray<NSDictionary *> *result = [[NSMutableArray alloc] init];
+        
+        [localizedTitles enumerateObjectsUsingBlock:^(PHAssetCollection * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
+            PHAssetCollectionSubtype type = [obj assetCollectionSubtype];
+            
+            BOOL isAdd = true;
+            if (@available(iOS 11.0, *)) {
+                if (type == PHAssetCollectionSubtypeSmartAlbumAnimated
+                    || type == PHAssetCollectionSubtypeSmartAlbumLongExposures
+                    || type == PHAssetCollectionSubtypeSmartAlbumLivePhotos
+                    || type == PHAssetCollectionSubtypeSmartAlbumScreenshots) {
+                  isAdd = false;
+                }
+            }
+            
+            if(type == PHAssetCollectionSubtypeSmartAlbumTimelapses
+               || type == PHAssetCollectionSubtypeSmartAlbumSlomoVideos
+               || type == PHAssetCollectionSubtypeSmartAlbumRecentlyAdded
+               || type == PHAssetCollectionSubtypeSmartAlbumAllHidden)
+                isAdd = false;
+            
+            if (isAdd) {
+                PHFetchOptions *fetchOptions = [[PHFetchOptions alloc] init];
+                fetchOptions.predicate = [NSPredicate predicateWithFormat:@"mediaType == %d || mediaType == %d", PHAssetMediaTypeImage , PHAssetMediaTypeVideo];
+                fetchOptions.sortDescriptors = @[ [NSSortDescriptor sortDescriptorWithKey:@"creationDate" ascending:YES] ];
+                PHFetchResult *fetchResult = [PHAsset fetchAssetsInAssetCollection:obj options: fetchOptions];
+                PHAsset *coverAsset = fetchResult.lastObject;
+                
+                if (coverAsset) {
+                    NSDictionary *album = @{@"count": @(fetchResult.count),
+                                            @"name": obj.localizedTitle,
+                                            @"cover": [NSString stringWithFormat:@"ph://%@", coverAsset.localIdentifier] };
+                    
+                    [result addObject:album];
+                }
+            }
+            
+        }];
+        
+//      PHFetchResult<PHAssetCollection *> *collections = [PHAssetCollection fetchAssetCollectionsWithType:PHAssetCollectionTypeSmartAlbum subtype:PHAssetCollectionSubtypeAny options:nil];
+//      __block NSMutableArray<NSDictionary *> *result = [[NSMutableArray alloc] init];
+//      [collections enumerateObjectsUsingBlock:^(PHAssetCollection * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
+//        PHAssetCollectionSubtype type = [obj assetCollectionSubtype];
+//        if (!isAlbumTypeSupported(type)) {
+//          return;
+//        }
+//        PHFetchOptions *fetchOptions = [[PHFetchOptions alloc] init];
+//        fetchOptions.predicate = [NSPredicate predicateWithFormat:@"mediaType == %d || mediaType == %d", PHAssetMediaTypeImage , PHAssetMediaTypeVideo];
+//        fetchOptions.sortDescriptors = @[ [NSSortDescriptor sortDescriptorWithKey:@"creationDate" ascending:YES] ];
+//        PHFetchResult *fetchResult = [PHAsset fetchAssetsInAssetCollection:obj options: fetchOptions];
+//        PHAsset *coverAsset = fetchResult.lastObject;
+//        if (coverAsset) {
+//            NSDictionary *album = @{@"count": @(fetchResult.count),
+//                                    @"name": albumNameFromType(type),
+//                                    // Photos Framework asset scheme ph://
+//                                    // https://github.com/facebook/react-native/blob/master/Libraries/CameraRoll/RCTPhotoLibraryImageLoader.m
+//                                    @"cover": [NSString stringWithFormat:@"ph://%@", coverAsset.localIdentifier] };
+//            [result addObject:album];
+//        }
+//      }];
 
       resolve(result);
 
     } else {
-
       NSString *errorMessage = @"Access Photos Permission Denied";
-
       NSError *error = RCTErrorWithMessage(errorMessage);
-
       reject(@(error.code), errorMessage, error);
-
     }
-
   }];
 
 }
@@ -250,4 +271,16 @@ static BOOL isAlbumTypeSupported(PHAssetCollectionSubtype type) {
 
   }
 
+}
+
+static BOOL isAlbumTypeNotSupported(PHAssetCollectionSubtype type)
+{
+    switch (type) {
+        case PHAssetCollectionSubtypeSmartAlbumAnimated:
+        case PHAssetCollectionSubtypeSmartAlbumLongExposures:
+        case PHAssetCollectionSubtypeSmartAlbumDepthEffect:
+            return YES;
+        default:
+            return NO;
+    }
 }
