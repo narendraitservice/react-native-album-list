@@ -79,20 +79,24 @@ RCT_EXPORT_METHOD(getAlbumList:(NSDictionary *)options
             PHAssetCollectionSubtype type = [obj assetCollectionSubtype];
             
             BOOL isAdd = true;
-            if (@available(iOS 11.0, *)) {
-                if (type == PHAssetCollectionSubtypeSmartAlbumAnimated
-                    || type == PHAssetCollectionSubtypeSmartAlbumLongExposures
-                    || type == PHAssetCollectionSubtypeSmartAlbumLivePhotos
-                    || type == PHAssetCollectionSubtypeSmartAlbumScreenshots) {
-                  isAdd = false;
+            if (type > 300)
+                isAdd=false;
+            else {
+                if (@available(iOS 11.0, *)) {
+                    if (type == PHAssetCollectionSubtypeSmartAlbumAnimated
+                        || type == PHAssetCollectionSubtypeSmartAlbumLongExposures
+                        || type == PHAssetCollectionSubtypeSmartAlbumLivePhotos
+                        || type == PHAssetCollectionSubtypeSmartAlbumScreenshots) {
+                        isAdd = false;
+                    }
                 }
+                
+                if(type == PHAssetCollectionSubtypeSmartAlbumTimelapses
+                   || type == PHAssetCollectionSubtypeSmartAlbumSlomoVideos
+                   || type == PHAssetCollectionSubtypeSmartAlbumRecentlyAdded
+                   || type == PHAssetCollectionSubtypeSmartAlbumAllHidden)
+                    isAdd = false;
             }
-            
-            if(type == PHAssetCollectionSubtypeSmartAlbumTimelapses
-               || type == PHAssetCollectionSubtypeSmartAlbumSlomoVideos
-               || type == PHAssetCollectionSubtypeSmartAlbumRecentlyAdded
-               || type == PHAssetCollectionSubtypeSmartAlbumAllHidden)
-                isAdd = false;
             
             if (isAdd) {
                 PHFetchOptions *fetchOptions = [[PHFetchOptions alloc] init];
