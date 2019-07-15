@@ -43,103 +43,100 @@ RCT_EXPORT_MODULE();
 
 
 RCT_EXPORT_METHOD(getAlbumList:(NSDictionary *)options
-
                   resolver:(RCTPromiseResolveBlock)resolve
-
                   rejecter:(RCTPromiseRejectBlock)reject)
-
 {
 
   [RNAlbumsModule authorize:^(BOOL authorized) {
 
-    if (authorized) {
-
-        NSArray *collectionsFetchResults;
-        
-        PHFetchResult *smartAlbums = [PHAssetCollection fetchAssetCollectionsWithType:PHAssetCollectionTypeSmartAlbum subtype:PHAssetCollectionSubtypeAlbumRegular options:nil];
-        PHFetchResult *syncedAlbums = [PHAssetCollection fetchAssetCollectionsWithType:PHAssetCollectionTypeAlbum subtype:PHAssetCollectionSubtypeAlbumSyncedAlbum options:nil];
-        PHFetchResult *userCollections = [PHCollectionList fetchTopLevelUserCollectionsWithOptions:nil];
-        
-        // Add each PHFetchResult to the array
-        collectionsFetchResults = @[smartAlbums, userCollections, syncedAlbums];
-        NSMutableArray *localizedTitles = [[NSMutableArray alloc] init];
-        for (int i = 0; i < collectionsFetchResults.count; i ++)
-        {
-            PHFetchResult *fetchResult = collectionsFetchResults[i];
-            for (int x = 0; x < fetchResult.count; x++)
-            {
-                PHCollection *collection = fetchResult[x];
-                [localizedTitles addObject:collection];
-            }
-        }
-        
+    if (authorized)
+    {
         __block NSMutableArray<NSDictionary *> *result = [[NSMutableArray alloc] init];
         
-        [localizedTitles enumerateObjectsUsingBlock:^(PHAssetCollection * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
-            PHAssetCollectionSubtype type = [obj assetCollectionSubtype];
+        BOOL isAlbum = [[options valueForKey:@"isAlbum"] boolValue];
+        NSString *mediaType = [options valueForKey:@"mediaType"];
+        
+        if (isAlbum)
+        {
+            NSArray *collectionsFetchResults;
+            PHFetchResult *smartAlbums = [PHAssetCollection fetchAssetCollectionsWithType:PHAssetCollectionTypeSmartAlbum subtype:PHAssetCollectionSubtypeAlbumRegular options:nil];
+            PHFetchResult *syncedAlbums = [PHAssetCollection fetchAssetCollectionsWithType:PHAssetCollectionTypeAlbum subtype:PHAssetCollectionSubtypeAlbumSyncedAlbum options:nil];
+            PHFetchResult *userCollections = [PHCollectionList fetchTopLevelUserCollectionsWithOptions:nil];
             
-            BOOL isAdd = true;
-            if (type > 300)
-                isAdd=false;
-            else {
-                if (@available(iOS 11.0, *)) {
-                    if (type == PHAssetCollectionSubtypeSmartAlbumAnimated
-                        || type == PHAssetCollectionSubtypeSmartAlbumLongExposures
-                        || type == PHAssetCollectionSubtypeSmartAlbumLivePhotos
-                        || type == PHAssetCollectionSubtypeSmartAlbumScreenshots) {
+            // Add each PHFetchResult to the array
+            collectionsFetchResults = @[smartAlbums, userCollections, syncedAlbums];
+            NSMutableArray *localizedTitles = [[NSMutableArray alloc] init];
+            for (int i = 0; i < collectionsFetchResults.count; i ++)
+            {
+                PHFetchResult *fetchResult = collectionsFetchResults[i];
+                for (int x = 0; x < fetchResult.count; x++)
+                {
+                    PHCollection *collection = fetchResult[x];
+                    [localizedTitles addObject:collection];
+                }
+            }
+            
+            [localizedTitles enumerateObjectsUsingBlock:^(PHAssetCollection * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
+                PHAssetCollectionSubtype type = [obj assetCollectionSubtype];
+                
+                BOOL isAdd = true;
+                if (type > 300)
+                    isAdd=false;
+                else {
+                    if (@available(iOS 11.0, *)) {
+                        if (type == PHAssetCollectionSubtypeSmartAlbumAnimated
+                            || type == PHAssetCollectionSubtypeSmartAlbumLongExposures
+                            || type == PHAssetCollectionSubtypeSmartAlbumLivePhotos
+                            || type == PHAssetCollectionSubtypeSmartAlbumScreenshots) {
+                            isAdd = false;
+                        }
+                    }
+                    
+                    if(type == PHAssetCollectionSubtypeSmartAlbumTimelapses
+                       || type == PHAssetCollectionSubtypeSmartAlbumSlomoVideos
+                       || type == PHAssetCollectionSubtypeSmartAlbumRecentlyAdded
+                       || type == PHAssetCollectionSubtypeSmartAlbumAllHidden
+                       || type == PHAssetCollectionSubtypeSmartAlbumPanoramas)
                         isAdd = false;
+                }
+                
+                if (isAdd)
+                {
+                    PHFetchOptions *fetchOptions = [[PHFetchOptions alloc] init];
+                    fetchOptions.sortDescriptors = @[[NSSortDescriptor sortDescriptorWithKey:@"creationDate" ascending:NO]];
+                    if ([mediaType caseInsensitiveCompare:@"all"] == NSOrderedSame)
+                        fetchOptions.predicate = [NSPredicate predicateWithFormat:@"mediaType = %d || mediaType = %d", PHAssetMediaTypeImage, PHAssetMediaTypeVideo];
+                    else if ([mediaType caseInsensitiveCompare:@"photos"] == NSOrderedSame)
+                        fetchOptions.predicate = [NSPredicate predicateWithFormat:@"mediaType = %d", PHAssetMediaTypeImage];
+                    else if ([mediaType caseInsensitiveCompare:@"videos"] == NSOrderedSame)
+                        fetchOptions.predicate = [NSPredicate predicateWithFormat:@"mediaType = %d", PHAssetMediaTypeVideo];
+                    
+                    PHFetchResult *fetchResult = [PHAsset fetchAssetsInAssetCollection:obj options:fetchOptions];
+                    PHAsset *coverAsset = fetchResult.lastObject;
+                    
+                    if (coverAsset && fetchResult.count > 0)
+                    {
+                        NSDictionary *album = @{@"count": @(fetchResult.count),
+                                                @"name": obj.localizedTitle,
+                                                @"cover": [NSString stringWithFormat:@"ph://%@", coverAsset.localIdentifier] };
+                        
+                        [result addObject:album];
                     }
                 }
                 
-                if(type == PHAssetCollectionSubtypeSmartAlbumTimelapses
-                   || type == PHAssetCollectionSubtypeSmartAlbumSlomoVideos
-                   || type == PHAssetCollectionSubtypeSmartAlbumRecentlyAdded
-                   || type == PHAssetCollectionSubtypeSmartAlbumAllHidden)
-                    isAdd = false;
-            }
+            }];
+        } else {
+            NSDictionary *album = @{@"count": [NSNumber numberWithInt:0],
+                                    @"name": mediaType,
+                                    @"cover": @""};
             
-            if (isAdd) {
-                PHFetchOptions *fetchOptions = [[PHFetchOptions alloc] init];
-                fetchOptions.predicate = [NSPredicate predicateWithFormat:@"mediaType == %d || mediaType == %d", PHAssetMediaTypeImage , PHAssetMediaTypeVideo];
-                fetchOptions.sortDescriptors = @[ [NSSortDescriptor sortDescriptorWithKey:@"creationDate" ascending:YES] ];
-                PHFetchResult *fetchResult = [PHAsset fetchAssetsInAssetCollection:obj options: fetchOptions];
-                PHAsset *coverAsset = fetchResult.lastObject;
-                
-                if (coverAsset) {
-                    NSDictionary *album = @{@"count": @(fetchResult.count),
-                                            @"name": obj.localizedTitle,
-                                            @"cover": [NSString stringWithFormat:@"ph://%@", coverAsset.localIdentifier] };
-                    
-                    [result addObject:album];
-                }
-            }
-            
-        }];
+            [result addObject:album];
+        }
+
+        NSSortDescriptor *sd = [[NSSortDescriptor alloc] initWithKey:@"count" ascending:NO];
+        [result sortUsingDescriptors:@[sd]];
         
-//      PHFetchResult<PHAssetCollection *> *collections = [PHAssetCollection fetchAssetCollectionsWithType:PHAssetCollectionTypeSmartAlbum subtype:PHAssetCollectionSubtypeAny options:nil];
-//      __block NSMutableArray<NSDictionary *> *result = [[NSMutableArray alloc] init];
-//      [collections enumerateObjectsUsingBlock:^(PHAssetCollection * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
-//        PHAssetCollectionSubtype type = [obj assetCollectionSubtype];
-//        if (!isAlbumTypeSupported(type)) {
-//          return;
-//        }
-//        PHFetchOptions *fetchOptions = [[PHFetchOptions alloc] init];
-//        fetchOptions.predicate = [NSPredicate predicateWithFormat:@"mediaType == %d || mediaType == %d", PHAssetMediaTypeImage , PHAssetMediaTypeVideo];
-//        fetchOptions.sortDescriptors = @[ [NSSortDescriptor sortDescriptorWithKey:@"creationDate" ascending:YES] ];
-//        PHFetchResult *fetchResult = [PHAsset fetchAssetsInAssetCollection:obj options: fetchOptions];
-//        PHAsset *coverAsset = fetchResult.lastObject;
-//        if (coverAsset) {
-//            NSDictionary *album = @{@"count": @(fetchResult.count),
-//                                    @"name": albumNameFromType(type),
-//                                    // Photos Framework asset scheme ph://
-//                                    // https://github.com/facebook/react-native/blob/master/Libraries/CameraRoll/RCTPhotoLibraryImageLoader.m
-//                                    @"cover": [NSString stringWithFormat:@"ph://%@", coverAsset.localIdentifier] };
-//            [result addObject:album];
-//        }
-//      }];
-
-      resolve(result);
-
+        resolve(result);
     } else {
       NSString *errorMessage = @"Access Photos Permission Denied";
       NSError *error = RCTErrorWithMessage(errorMessage);
