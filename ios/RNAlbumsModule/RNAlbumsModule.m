@@ -40,7 +40,9 @@ static BOOL isAlbumTypeSupported(PHAssetCollectionSubtype type);
 
 RCT_EXPORT_MODULE();
 
-
+NSArray<NSDictionary *> *arrAllAlbums;
+NSArray<NSDictionary *> *arrVideosAlbums;
+NSArray<NSDictionary *> *arrPhotosAlbums;
 
 RCT_EXPORT_METHOD(getAlbumList:(NSDictionary *)options
                   resolver:(RCTPromiseResolveBlock)resolve
@@ -58,6 +60,21 @@ RCT_EXPORT_METHOD(getAlbumList:(NSDictionary *)options
         
         if (isAlbum)
         {
+            if ([mediaType isEqual:@"all"] && [arrAllAlbums count] > 0) {
+                resolve(arrAllAlbums);
+                return;
+            }
+            
+            if ([mediaType isEqual:@"photos"] && [arrPhotosAlbums count] > 0) {
+                resolve(arrPhotosAlbums);
+                return;
+            }
+            
+            if ([mediaType isEqual:@"videos"] && [arrVideosAlbums count] > 0) {
+                resolve(arrVideosAlbums);
+                return;
+            }
+            
             NSArray *collectionsFetchResults;
             PHFetchResult *smartAlbums = [PHAssetCollection fetchAssetCollectionsWithType:PHAssetCollectionTypeSmartAlbum subtype:PHAssetCollectionSubtypeAlbumRegular options:nil];
             PHFetchResult *syncedAlbums = [PHAssetCollection fetchAssetCollectionsWithType:PHAssetCollectionTypeAlbum subtype:PHAssetCollectionSubtypeAlbumSyncedAlbum options:nil];
@@ -125,18 +142,30 @@ RCT_EXPORT_METHOD(getAlbumList:(NSDictionary *)options
                 }
                 
             }];
+            
+            NSSortDescriptor *sd = [[NSSortDescriptor alloc] initWithKey:@"count" ascending:NO];
+            [result sortUsingDescriptors:@[sd]];
+            
+            if ([mediaType isEqual:@"all"])
+                arrAllAlbums = result;
+            else if ([mediaType isEqual:@"photos"])
+                arrPhotosAlbums = result;
+            else if ([mediaType isEqual:@"videos"])
+                arrVideosAlbums = result;
+            
+            resolve(result);
         } else {
             NSDictionary *album = @{@"count": [NSNumber numberWithInt:0],
                                     @"name": mediaType,
                                     @"cover": @""};
             
             [result addObject:album];
+            
+            NSSortDescriptor *sd = [[NSSortDescriptor alloc] initWithKey:@"count" ascending:NO];
+            [result sortUsingDescriptors:@[sd]];
+            
+            resolve(result);
         }
-
-        NSSortDescriptor *sd = [[NSSortDescriptor alloc] initWithKey:@"count" ascending:NO];
-        [result sortUsingDescriptors:@[sd]];
-        
-        resolve(result);
     } else {
       NSString *errorMessage = @"Access Photos Permission Denied";
       NSError *error = RCTErrorWithMessage(errorMessage);
